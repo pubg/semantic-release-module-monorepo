@@ -20,6 +20,7 @@ const getPackagePath = async () => {
   return path.relative(gitRoot, path.resolve(packagePath, '..'));
 };
 
+
 const withFiles = async commits => {
   const limit = pLimit(Number(process.env.SRM_MAX_THREADS) || 500);
   return Promise.all(
@@ -32,23 +33,51 @@ const withFiles = async commits => {
   );
 };
 
-const onlyPackageCommits = async commits => {
+const onlyPackageCommits = async (pluginConfig, commits, logger) => {
   const packagePath = await getPackagePath();
   debug('Filter commits by package path: "%s"', packagePath);
+  debug('Plugin config: %o', pluginConfig);
+  
+  const dependencies = pluginConfig?.dependencies || [];
+  debug('Dependencies to check: %o', dependencies);
+  
   const commitsWithFiles = await withFiles(commits);
   // Convert package root path into segments - one for each folder
   const packageSegments = packagePath.split(path.sep);
+  
+  // Normalize dependency paths and convert to segments
+  const dependencyPaths = await Promise.all(dependencies.map(async dep => {
+    const normalizedPath = dep;
+    return {
+      path: normalizedPath,
+        segments: normalizedPath.split(path.sep),
+      };
+    })
+  );
+
+  logger.info('Dependency paths: %o', dependencyPaths);
 
   return commitsWithFiles.filter(({ files, subject }) => {
     // Normalise paths and check if any changed files' path segments start
     // with that of the package root.
     const packageFile = files.find(file => {
-      const fileSegments = path.normalize(file).split(path.sep);
-      // Check the file is a *direct* descendent of the package folder (or the folder itself)
-      return packageSegments.every(
+      const normalizedFile = path.normalize(file);
+      const fileSegments = normalizedFile.split(path.sep);
+      
+      // Check if file belongs to main package
+      const isPackageFile = packageSegments.every(
         (packageSegment, i) => packageSegment === fileSegments[i]
       );
+      
+      if (isPackageFile) return true;
+      
+      // Check if file belongs to any dependency paths
+      return dependencyPaths.some(({ segments }) => 
+        segments.every((segment, i) => segment === fileSegments[i])
+      );
     });
+
+    logger.info('Package file: %o', packageFile);
 
     if (packageFile) {
       debug(
@@ -84,7 +113,7 @@ const withOnlyPackageCommits = plugin => async (pluginConfig, config) => {
   return plugin(
     pluginConfig,
     await pipeP(
-      mapCommits(onlyPackageCommits),
+      mapCommits(commits => onlyPackageCommits(pluginConfig, commits, logger)),
       tapA(logFilteredCommitCount(logger))
     )(config)
   );

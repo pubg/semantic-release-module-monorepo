@@ -1,6 +1,6 @@
 {
-  "name": "semantic-release-monorepo",
-  "version": "0.0.0-development",
+  "name": "@pubgcorp/semantic-release-module-monorepo",
+  "version": "0.0.1",
   "description": "Plugins for `semantic-release` allowing it to be used with a monorepo.",
   "main": "src/index.js",
   "type": "module",
@@ -14,7 +14,7 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "semantic-release": ">=22.0.7"
+    "semantic-release": "^24.2.3"
   },
   "dependencies": {
     "debug": "^4.3.4",
